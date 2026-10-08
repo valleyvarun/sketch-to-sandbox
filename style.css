@@ -1,0 +1,803 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  height: 100vh;
+  background-color: #0b1c36;
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+}
+
+.site-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border: 1px solid #ffffff;
+}
+
+.header {
+  height: 70px;
+  background-color: #0b1c36;
+  border-bottom: 1px solid #ffffff;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  gap: 2px;
+}
+
+.header-center {
+  text-align: center;
+}
+
+.header-title {
+  font-size: 1.25rem;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+}
+
+.header-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
+}
+
+.header-line-primary {
+  font-size: 0.85rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+.header-line-secondary {
+  font-size: 0.78rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) var(--right-sidebar-width, 300px);
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-left {
+  border-right: 1px solid #ffffff;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.sidebar-section {
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.sidebar-section + .sidebar-section {
+  border-top: 1px solid #ffffff;
+}
+
+.sidebar-section h2 {
+  font-size: 1rem;
+  font-weight: 300;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+#travelForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.station-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.station-suggestions {
+  position: fixed;
+  z-index: 30;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #ffffff;
+  background: #0b1c36;
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+
+.station-suggestions > div {
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+
+.station-suggestions [role="option"] {
+  cursor: pointer;
+}
+
+.station-suggestions [role="option"]:hover,
+.station-suggestions [aria-selected="true"] {
+  background: #ffffff;
+  color: #0b1c36;
+}
+
+.travel-actions {
+  display: flex;
+  gap: 6px;
+}
+
+#runTravel {
+  flex: 1;
+}
+
+#clearTravel {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#travelForm input,
+#travelForm button {
+  background: #0b1c36;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  padding: 8px;
+  font: inherit;
+  min-width: 0;
+}
+
+#travelForm input {
+  width: 100%;
+}
+
+#travelForm input::placeholder {
+  color: #ffffff;
+}
+
+#travelForm .pick-button,
+#constructionEditor .pick-button {
+  flex: 0 0 34px;
+  font-size: 1.1rem;
+}
+
+#travelForm button:enabled {
+  cursor: pointer;
+}
+
+#travelForm button:disabled {
+  opacity: 0.45;
+}
+
+#travelForm #runTravel:enabled,
+#travelForm .pick-button[aria-pressed="true"],
+#constructionEditor .pick-button[aria-pressed="true"] {
+  background: #ffffff;
+  color: #0b1c36;
+}
+
+#travelForm :focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+#travelStatus {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.mode-button,
+#constructionEditor button,
+#constructionEditor input,
+#constructionEditor select {
+  background: #0b1c36;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  padding: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.mode-button {
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.mode-button[aria-pressed="true"] {
+  background: #ffffff;
+  color: #0b1c36;
+}
+
+#travelForm[aria-disabled="true"],
+#constructionEditor[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+#constructionEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+  flex: 1;
+}
+
+#constructionSection {
+  display: flex;
+  flex-direction: column;
+}
+
+#constructionSection > * {
+  flex-shrink: 0;
+}
+
+.phase-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #ffffff;
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.phase-card legend {
+  padding-bottom: 8px;
+}
+
+.phase-card .station-input-row input {
+  flex: 1;
+  width: 100%;
+}
+
+#constructionEditor button:enabled {
+  cursor: pointer;
+}
+
+#constructionEditor button:disabled {
+  opacity: 0.45;
+}
+
+.construction-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+#constructionEditor #buildPlan {
+  flex: 1;
+}
+
+#constructionEditor #clearPlan {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#constructionEditor #buildPlan:enabled {
+  background: #ffffff;
+  color: #0b1c36;
+}
+
+#constructionStatus,
+#builtPlan p {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.plan-sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  overflow-y: auto;
+  min-height: 0;
+  height: 100%;
+}
+
+#travelStatus:empty {
+  display: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#travelPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 12px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+#travelPanel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#travelPanel th,
+#travelPanel td {
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #ffffff;
+  padding: 5px 3px;
+  font-weight: 300;
+}
+
+#travelPanel h3 {
+  font-size: 0.85rem;
+  font-weight: 400;
+  margin: 12px 0 6px;
+}
+
+#travelPanel p {
+  margin-bottom: 8px;
+}
+
+#travelPanel ol {
+  padding-left: 20px;
+}
+
+#travelPanel .travel-journey {
+  list-style: none;
+  padding: 4px 0;
+}
+
+.travel-leg {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-rows: auto minmax(36px, auto) auto;
+  column-gap: 12px;
+  padding-bottom: 24px;
+}
+
+.journey-track {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  justify-self: center;
+  position: relative;
+  margin: 7px 0;
+  border-left: 6px solid currentColor;
+}
+
+.journey-track[data-system="suburban"] {
+  border-left-style: dashed;
+}
+
+.journey-track::before,
+.journey-track::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  width: 14px;
+  height: 14px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  background: #0b1c36;
+}
+
+.journey-track::before {
+  top: -7px;
+}
+
+.journey-track::after {
+  bottom: -7px;
+}
+
+.journey-start,
+.journey-line,
+.journey-end {
+  grid-column: 2;
+}
+
+.journey-start { grid-row: 1; }
+.journey-line { grid-row: 2; align-self: center; }
+.journey-end { grid-row: 3; }
+
+#travelPanel a {
+  color: #ffffff;
+}
+
+#travelFormulas {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff;
+}
+
+#travelFormulas .travel-equation {
+  font-family: 'Cambria Math', 'Times New Roman', serif;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  letter-spacing: normal;
+}
+
+#travelFormulas h4 {
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin: 12px 0 6px;
+}
+
+.plan-sidebar h2 {
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 300;
+  margin-bottom: 16px;
+}
+
+.built-phase {
+  position: relative;
+  padding: 12px 0;
+  border-bottom: 1px solid #ffffff;
+}
+
+.built-phase h3 {
+  padding-right: 64px;
+  min-height: 26px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+
+.clear-phase {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  background: #0b1c36;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.clear-phase:enabled {
+  cursor: pointer;
+}
+
+.clear-phase:disabled {
+  opacity: 0.45;
+}
+
+.built-phase ol {
+  padding-left: 20px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.mode-button:focus-visible,
+.clear-phase:focus-visible,
+#constructionEditor :focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.endpoint-marker {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 1px #ffffff;
+  pointer-events: none;
+}
+
+.endpoint-marker span {
+  position: absolute;
+  bottom: 28px;
+  left: -2px;
+  background: #ffffff;
+  color: #000000;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+.content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #0b1c36;
+  overflow: hidden;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+.year-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.year-selector {
+  display: flex;
+  align-items: center;
+  background: #0b1c36;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+}
+
+.year-selector output {
+  min-width: 110px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #90ee90;
+}
+
+.year-selector output[data-final-plan="true"] {
+  color: #ff9999;
+}
+
+.year-selector button,
+#autoplayYears {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+#autoplayYears {
+  background: #0b1c36;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+}
+
+.year-selector button:disabled,
+#autoplayYears:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.year-selector button:focus-visible,
+#autoplayYears:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+
+.station-popup {
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  letter-spacing: normal;
+  color: #0b1c36;
+}
+
+.station-popup .mapboxgl-popup-content {
+  padding: 20px 14px 14px;
+  border: 1px solid #0b1c36;
+}
+
+.station-popup table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.station-popup caption {
+  text-align: left;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.station-popup th,
+.station-popup td {
+  padding: 6px;
+  border: 1px solid #0b1c36;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.station-popup th {
+  font-weight: 400;
+}
+
+.station-popup p {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.station-popup .mapboxgl-popup-close-button {
+  color: #0b1c36;
+  width: 24px;
+  height: 24px;
+}
+
+/* Mapbox UI controls themed to dark blue and white */
+.mapboxgl-ctrl-group {
+  background-color: #0b1c36 !important;
+  border: 1px solid #ffffff !important;
+  border-radius: 0 !important;
+}
+
+.mapboxgl-ctrl-group button {
+  border-bottom: 1px solid #ffffff !important;
+}
+
+.mapboxgl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+.mapboxgl-ctrl-icon {
+  filter: invert(1) brightness(2);
+}
+
+.mapboxgl-ctrl-attrib {
+  background-color: #0b1c36 !important;
+  color: #ffffff !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  border-left: 1px solid #ffffff;
+  border-top: 1px solid #ffffff;
+}
+
+.mapboxgl-ctrl-attrib a {
+  color: #ffffff !important;
+}
+
+/* Token Prompt Overlay (Dark Blue & White) */
+.token-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0b1c36;
+  z-index: 10;
+  padding: 20px;
+}
+
+.token-prompt-content {
+  border: 1px solid #ffffff;
+  padding: 24px 28px;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #05101f;
+}
+
+.prompt-title {
+  font-size: 1.1rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+}
+
+.prompt-subtitle {
+  font-size: 0.85rem;
+  font-weight: 300;
+}
+
+.prompt-subtitle code {
+  font-family: monospace;
+  padding: 2px 4px;
+  border: 1px solid #ffffff;
+}
+
+.prompt-input-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.prompt-input-group input {
+  flex: 1;
+  background-color: #0b1c36;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  font-family: inherit;
+  font-weight: 300;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.prompt-input-group button {
+  background-color: #0b1c36;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  font-family: inherit;
+  font-weight: 300;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.prompt-input-group button:hover {
+  background-color: #122c54;
+}
+
+.sidebar-right {
+  border-left: 1px solid #ffffff;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+#sidebarResize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  z-index: 10;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+#sidebarResize:hover,
+#sidebarResize:focus-visible {
+  outline: 1px solid #ffffff;
+  background: #0b1c36;
+}
+
+.footer {
+  height: 55px;
+  background-color: #0b1c36;
+  border-top: 1px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 24px;
+  flex-shrink: 0;
+  padding: 0 24px;
+}
+
+.footer label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.footer input {
+  accent-color: #ffffff;
+}
+
+.box {
+  background-color: #0b1c36;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

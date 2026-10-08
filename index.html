@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal Layout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300&display=swap" rel="stylesheet">
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="site-container">
+    <header class="header">
+      <div class="header-left">
+        <span class="header-line-primary">Simulations, Models, Twins</span>
+        <span class="header-line-secondary">Sketch to Forecast - 04</span>
+      </div>
+      <div class="header-center">
+        <h1 class="header-title">Namma Metro Bengaluru</h1>
+      </div>
+      <div class="header-right">
+        <span class="header-line-primary">Varun SA</span>
+        <span class="header-line-secondary">MS CDP</span>
+      </div>
+    </header>
+    <div id="mainLayout" class="main-layout">
+      <aside class="sidebar-left">
+        <section class="sidebar-section" aria-label="Travel">
+          <button id="travelMode" class="mode-button" type="button" aria-pressed="true" disabled>Travel mode</button>
+          <form id="travelForm">
+            <label for="fromStation">from:</label>
+            <div class="station-input-row">
+              <input id="fromStation" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                aria-controls="fromSuggestions" placeholder="Search stations" autocomplete="off" disabled>
+              <div id="fromSuggestions" class="station-suggestions" role="listbox" aria-label="From stations" hidden></div>
+              <button type="button" id="pickFrom" class="pick-button" title="Pick start station from map"
+                aria-label="Pick start station from map" aria-pressed="false" disabled>&#8853;</button>
+            </div>
+            <label for="toStation">to:</label>
+            <div class="station-input-row">
+              <input id="toStation" role="combobox" aria-autocomplete="list" aria-expanded="false"
+                aria-controls="toSuggestions" placeholder="Search stations" autocomplete="off" disabled>
+              <div id="toSuggestions" class="station-suggestions" role="listbox" aria-label="To stations" hidden></div>
+              <button type="button" id="pickTo" class="pick-button" title="Pick end station from map"
+                aria-label="Pick end station from map" aria-pressed="false" disabled>&#8853;</button>
+            </div>
+            <div class="travel-actions">
+              <button id="runTravel" type="submit" disabled>Travel</button>
+              <button id="clearTravel" type="button" title="Clear travel route"
+                aria-label="Clear travel route" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false">
+                  <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"></path>
+                </svg>
+              </button>
+            </div>
+          </form>
+        </section>
+        <section id="constructionSection" class="sidebar-section" aria-label="Construction Plan">
+          <button id="constructionMode" class="mode-button" type="button" aria-pressed="false" disabled>Edit construction plan</button>
+          <div id="constructionEditor" aria-disabled="true">
+            <div id="phaseList"></div>
+            <button id="addPhase" type="button" disabled>Add Phase</button>
+            <p id="constructionStatus" role="status" aria-live="polite">Load the map to plan construction.</p>
+            <div class="construction-actions">
+              <button id="buildPlan" type="button" disabled>Build</button>
+              <button id="clearPlan" type="button" title="Clear phase selections"
+                aria-label="Clear phase selections" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="1.5" aria-hidden="true" focusable="false">
+                  <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </section>
+      </aside>
+      <main class="content">
+        <div id="map"></div>
+        <div class="year-controls">
+          <div class="year-selector" role="group" aria-label="Map opening year">
+          <button id="previousYear" type="button" aria-label="Previous year" disabled>&lt;</button>
+          <output id="mapYear" data-final-plan="true" aria-live="polite">final plan</output>
+          <button id="nextYear" type="button" aria-label="Next year" disabled>&gt;</button>
+          </div>
+          <button id="autoplayYears" type="button" aria-label="Play years" title="Play years"
+            aria-pressed="false" disabled><span aria-hidden="true">&#9654;</span></button>
+        </div>
+      </main>
+      <aside id="rightSidebar" class="sidebar-right" aria-label="Travel and construction information">
+        <div id="sidebarResize" role="separator" tabindex="0" aria-orientation="vertical"
+          aria-label="Resize right sidebar" aria-controls="rightSidebar"
+          aria-valuemin="300" aria-valuenow="300"
+          title="Drag to resize. Left/right arrows adjust width; Home resets it."></div>
+        <div class="plan-sidebar">
+          <section id="travelPanel" aria-label="Travel details">
+            <h2>Travel details</h2>
+            <p id="travelStatus" role="status" aria-live="polite">Load the map to plan a route.</p>
+            <div id="travelResult"></div>
+            <section id="travelFormulas" aria-label="Formulas and constants"></section>
+          </section>
+          <div id="builtPlan" aria-label="Saved construction phases" hidden><p>No plan built yet.</p></div>
+        </div>
+      </aside>
+    </div>
+    <footer class="footer">
+      <label><input type="checkbox" id="showMetro" checked> namma metro</label>
+      <label><input type="checkbox" id="showSuburban" checked> suburban rail</label>
+      <label><input type="checkbox" id="showStationNames" checked> station names</label>
+    </footer>
+  </div>
+  <script src="routing.js"></script>
+  <script src="travel-info.js"></script>
+  <script src="sidebar-resize.js"></script>
+  <script src="station-search.js"></script>
+  <script src="construction.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
