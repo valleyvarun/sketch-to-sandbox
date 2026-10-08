@@ -11,6 +11,17 @@ const data = JSON.parse(fs.readFileSync(path.join(root, 'datasets',
   'Bengaluru_metro_suburban_rail_upgraded.geojson'), 'utf8'));
 const stations = data.features.filter(feature => feature.geometry.type === 'Point');
 
+test('footer dataset downloads link to the existing CSV and upgraded GeoJSON', () => {
+  const footer = html.match(/<footer class="footer">[\s\S]*?<\/footer>/)[0];
+  const links = [...footer.matchAll(/<a href="([^"]+)" download>([^<]+)<\/a>/g)];
+  assert.deepEqual(links.map(([, href, label]) => [href, label]), [
+    ['datasets/Namma_Metro_by_phase.csv', 'Download CSV'],
+    ['datasets/Bengaluru_metro_suburban_rail_upgraded.geojson', 'Download GeoJSON']
+  ]);
+  for (const [, href] of links) assert.ok(fs.statSync(path.join(root, href)).size > 0);
+  assert.ok(footer.indexOf('footer-downloads') > footer.indexOf('showStationNames'));
+});
+
 function addListener(events, event, fn) {
   if (!events[event]) {
     const listeners = new Set();
@@ -225,7 +236,10 @@ test('right Build creates per-phase estimates and yearly timeline, enabling only
   e.calculatePlan.fire('click');
   assert.equal(e.constructionEstimate.hidden, false);
   assert.equal(e.constructionEstimate.open, true);
-  assert.match(text(e.constructionResult), new RegExp(`${expected.totalMonths} months`));
+  const durationRows = e.constructionResult.children.filter(child => child.tagName === 'table')
+    .map(table => table.children.find(row => row.children[0].textContent === 'Duration').children[1].textContent);
+  assert.deepEqual(durationRows, [...expected.phases.map(phase => phase.months), expected.totalMonths]
+    .map(require('../construction-info.js').formatDuration));
   assert.ok(text(e.constructionResult).includes(`INR ${expected.totalCost.toFixed(2)} crore`));
   for (const phase of expected.phases) {
     assert.ok(text(e.constructionResult).includes(`INR ${phase.cost.toFixed(2)} crore`));
@@ -1504,7 +1518,11 @@ test('Travel details and formulas live on the right and update without deleting 
   assert.equal(rows()['Stations (incl. endpoints)'], '37');
   assert.equal(rows()['Line changes'], '0');
   assert.match(rows()['Distance'], /^\d+\.\d{2} km$/);
-  assert.match(rows()['Estimated time'], /^\d+\.\d min$/);
+  const trip = RailRouting.findRoute(RailRouting.buildNetwork(data), 'ST001', 'ST037');
+  const minutes = require('../travel-info.js').calculate(trip).totalMinutes;
+  const tenths = Math.round(minutes * 10);
+  assert.equal(rows()['Estimated time'], `${Math.floor(tenths / 600)} hr ${(tenths % 600) / 10} min`);
+  assert.match(text(e.travelResult), /Time breakdown: \d+ hr [\d.]+ min running/);
   assert.equal(rows()['Total cost (estimate)'], 'INR 90');
   assert.match(text(e.travelResult), /Metro - Purple/);
   assert.match(text(e.travelResult), /Planning estimate, not a ticket quote/);

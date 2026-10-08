@@ -950,6 +950,23 @@ body {
   accent-color: #ffffff;
 }
 
+.footer-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.footer-downloads a {
+  color: #ffffff;
+}
+
+.footer-downloads a:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 3px;
+}
+
 .box {
   background-color: #0b1c36;
   display: flex;

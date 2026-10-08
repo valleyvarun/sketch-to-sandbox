@@ -98,6 +98,14 @@ const TravelInfo = (() => {
     };
   }
 
+  function formatDuration(minutes) {
+    if (!Number.isFinite(minutes) || minutes < 0) throw new Error('Travel duration requires non-negative minutes.');
+    const tenths = Math.round(minutes * 10);
+    const hours = Math.floor(tenths / 600);
+    const remaining = (tenths % 600) / 10;
+    return `${hours ? hours + ' hr ' : ''}${remaining} min`;
+  }
+
   function create() {
     const result = document.getElementById('travelResult');
     const formulas = document.getElementById('travelFormulas');
@@ -180,7 +188,7 @@ const TravelInfo = (() => {
         table(result, [
           ['From', from], ['To', to],
           ['Distance', `${info.totalKm.toFixed(2)} km`],
-          ['Estimated time', `${info.totalMinutes.toFixed(1)} min`],
+          ['Estimated time', formatDuration(info.totalMinutes)],
           ['Stations (incl. endpoints)', info.stationCount],
           ['Line changes', info.lineChanges],
           ['Total cost (estimate)', `INR ${info.totalCost}`],
@@ -217,14 +225,14 @@ const TravelInfo = (() => {
         }
         result.appendChild(list);
         if (!info.lines.length) paragraph(result, 'Walking connection only; no train boarding.');
-        paragraph(result, `Time breakdown: ${info.runningMinutes.toFixed(1)} min running + ${info.stopMinutes.toFixed(1)} min stops + ${info.walkingMinutes.toFixed(1)} min walking + ${info.transferMinutes.toFixed(1)} min transfers.`);
+        paragraph(result, `Time breakdown: ${formatDuration(info.runningMinutes)} running + ${formatDuration(info.stopMinutes)} stops + ${formatDuration(info.walkingMinutes)} walking + ${formatDuration(info.transferMinutes)} transfers.`);
         paragraph(result, `${info.sameSystemTransfers} same-system and ${info.crossSystemTransfers} Metro/suburban transfers. Walking distance: ${info.km.walking.toFixed(2)} km.`);
         paragraph(result, 'Planning estimate, not a ticket quote or live journey time. Metro slabs are dated 9 February 2025; current fares are unverified. Suburban fares and future-line fares are estimates. See the assumptions below.');
         return info;
       }
     };
   }
-  return { constants, metroSlabs, metroFare, calculate, create };
+  return { constants, metroSlabs, metroFare, calculate, formatDuration, create };
 })();
 
 if (typeof module !== 'undefined') module.exports = TravelInfo;

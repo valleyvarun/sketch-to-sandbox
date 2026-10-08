@@ -1,6 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { calculate, metroFare, metroSlabs, constants } = require('../travel-info.js');
+const { calculate, metroFare, metroSlabs, constants, formatDuration } = require('../travel-info.js');
+
+test('Travel durations use hours and minutes with tenths preserved and rounding carried into hours', () => {
+  for (const [minutes, expected] of [
+    [0, '0 min'], [0.5, '0.5 min'], [59.9, '59.9 min'], [59.96, '1 hr 0 min'],
+    [60, '1 hr 0 min'], [90.5, '1 hr 30.5 min'], [119.96, '2 hr 0 min'],
+    [150, '2 hr 30 min']
+  ]) assert.equal(formatDuration(minutes), expected);
+  for (const invalid of [-1, NaN, Infinity]) assert.throws(() => formatDuration(invalid), /non-negative minutes/);
+});
 
 function route(segments) {
   return {

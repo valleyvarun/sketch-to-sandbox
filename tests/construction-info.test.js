@@ -6,6 +6,17 @@ const RailRouting = require('../routing.js');
 const ConstructionInfo = require('../construction-info.js');
 const { phasePath } = require('../construction.js');
 
+test('construction durations use years and remaining months with correct singular units', () => {
+  for (const [months, expected] of [
+    [0, '0 months'], [1, '1 month'], [11, '11 months'], [12, '1 year 0 months'],
+    [13, '1 year 1 month'], [24, '2 years 0 months'], [25, '2 years 1 month'],
+    [113, '9 years 5 months']
+  ]) assert.equal(ConstructionInfo.formatDuration(months), expected);
+  for (const invalid of [-1, 1.5, NaN, Infinity]) {
+    assert.throws(() => ConstructionInfo.formatDuration(invalid), /non-negative whole months/);
+  }
+});
+
 function fixture(system = 'metro') {
   const stations = new Map(['A', 'B', 'C', 'D', 'E'].map(id =>
     [id, { properties: { id } }]));

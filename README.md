@@ -40,6 +40,8 @@ station dots, and labels; transfer links appear only when both networks are on.
 The station names control toggles black labels for the visible networks.
 The footer checkbox labels show a solid white line beside namma metro and a
 dashed white line beside suburban rail.
+Download CSV and Download GeoJSON links at the right end of the footer download
+the phase-cost CSV and the upgraded network GeoJSON used by the site.
 
 Click a visible station dot to open a speech-bubble table with its name,
 coordinates (latitude, longitude), opening date, and opening year.
@@ -82,7 +84,7 @@ the footer visibility settings.
 ### Travel details and estimates
 
 Travel status and results appear in the right sidebar, not the left form.
-Results include distance (including walks), estimated minutes, distinct stations
+Results include distance (including walks), estimated hours/minutes, distinct stations
 including endpoints, lines in travel order, line changes, and estimated total
 cost with separate Metro/suburban amounts. Each rail leg is drawn vertically
 with endpoint circles, its boarding/alighting station names, and a thick line
@@ -97,6 +99,8 @@ Construction mode shows the
 saved phase list instead, without deleting it when switching back to Travel.
 Changing stations or year, clearing Travel, or entering construction clears
 the old Travel result.
+Travel durations and the time breakdown use hours plus remaining minutes,
+preserving tenths of a minute. Trips under an hour show minutes only.
 
 Drag the right sidebar's left divider to resize it. Its minimum width is 300px;
 the maximum leaves 200px for the map when the viewport permits. The divider
@@ -188,6 +192,8 @@ unchanged. It is disabled when there is no current draft.
 The right sidebar has **Build** and a trash button below the saved phases.
 Build calculates each saved phase's cost, duration and completion month, totals,
 and a vertical timeline showing every year from 2026 to the final completion.
+Phase and total durations display years plus remaining months (months only
+when under a year). Calculation rates and completion dates are unchanged.
 Only saved phases are included; an unfinished left-side draft is not built.
 After Build, the estimate and timeline appear at the top of the right sidebar.
 Below a divider are the saved phases and Build/trash buttons; below another

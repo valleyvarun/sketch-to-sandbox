@@ -89,6 +89,13 @@ const ConstructionInfo = (() => {
     return { stations, graph, maxYear: Math.max(startYear, report.completion.year) };
   }
 
+  function formatDuration(months) {
+    if (!Number.isSafeInteger(months) || months < 0) throw new Error('Construction duration requires non-negative whole months.');
+    const years = Math.floor(months / 12);
+    const remaining = months % 12;
+    return `${years ? years + (years === 1 ? ' year ' : ' years ') : ''}${remaining} ${remaining === 1 ? 'month' : 'months'}`;
+  }
+
   function create() {
     const result = document.getElementById('constructionResult');
     const estimate = document.getElementById('constructionEstimate');
@@ -143,14 +150,14 @@ const ConstructionInfo = (() => {
           ['New line', length(phase.km)],
           ['New stations', String(phase.stationCount)],
           ['Cost', cost(phase.cost)],
-          ['Duration', `${phase.months} months`],
+          ['Duration', formatDuration(phase.months)],
           ['Complete', phase.completion.label]
         ]);
       }
       text(result, 'h3', 'Total');
       table(result, [
         ['Cost', cost(report.totalCost)],
-        ['Duration', `${report.totalMonths} months`],
+        ['Duration', formatDuration(report.totalMonths)],
         ['Complete', report.completion.label]
       ]);
       if (units.usd) text(result, 'p', `Assumed exchange rate: INR ${inrPerUsd} = USD 1 (not live).`);
@@ -195,7 +202,7 @@ const ConstructionInfo = (() => {
       }
     };
   }
-  return { constants, startYear, calculate, projectNetwork, create };
+  return { constants, startYear, calculate, projectNetwork, formatDuration, create };
 })();
 
 if (typeof module !== 'undefined') module.exports = ConstructionInfo;
