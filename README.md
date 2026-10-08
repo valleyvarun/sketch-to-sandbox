@@ -150,12 +150,16 @@ The first phase defaults to number 3; numbers can be edited and must be unique,
 positive whole numbers. Subsequent phases default to the next number. Choose
 the first station, then the second on the same line. Both searches show
 only stations that have not opened yet. Saved phase endpoints are available in
-both fields; saved interior stations are excluded. After choosing the first
-station and line, the second search removes choices whose path overlaps a saved
-phase. Phases may meet at shared endpoints, including interchanges, but cannot
-reuse interior stations or track segments, even in reverse. These rules apply
-regardless of phase numbers. A line selector appears
-only if the first station is an interchange. Changing the first station or line
+both fields; saved interior stations are excluded only on their assigned line.
+An interchange remains selectable for another line, even when it lies inside
+a saved phase. Its line selector offers only eligible lines, automatically
+choosing the line when just one remains. After choosing the first station and
+line, the second search removes paths overlapping saved phases on that same
+line. Same-line phases may meet at endpoints but cannot reuse interior stations
+or track segments, even in reverse. Different lines may share or cross an
+interchange. These rules apply regardless of phase numbers; deleting a phase
+restores its line options without clearing valid draft selections.
+Changing the first station or line
 clears the second station. Each station field also has a map-pick button, with
 the same eligibility rules as its dropdown. The second button is enabled after
 choosing a first station and line. Invalid map picks show a notice and keep

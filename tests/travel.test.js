@@ -978,7 +978,7 @@ test('new phase searches exclude saved stations and draft edits leave the saved 
   const savedFeatures = structuredClone(map.sources['construction-path'].data.features);
   e.addPhase.fire('click');
   const second = phaseControls(e, 2);
-  for (let id = 101; id <= 105; id++) {
+  for (const id of [101, 102, 104, 105]) {
     assert.ok(!second.suggestions('from').includes(`ST${id}`));
   }
   assert.ok(second.suggestions('from').includes('ST100'));
@@ -994,7 +994,7 @@ test('new phase searches exclude saved stations and draft edits leave the saved 
   second.number.fire('input');
   second.from.value = '';
   second.from.fire('focus');
-  assert.ok(!second.suggestions('from').includes('ST103'), 'saved stations remain excluded regardless of phase number');
+  assert.ok(second.suggestions('from').includes('ST103'), 'the interchange remains available on red regardless of phase number');
   second.choose('from', 'ST108');
   assert.equal(second.to.value, '');
   assert.equal(e.buildPlan.disabled, true);
@@ -1008,7 +1008,7 @@ test('new phase searches exclude saved stations and draft edits leave the saved 
   e.clearPlan.fire('click');
   assert.equal(e.builtPlan.children.length, 3, 'Clear cannot remove saved phases without a draft');
   e.addPhase.fire('click');
-  assert.ok(!phaseControls(e, 3).suggestions('from').includes('ST103'));
+  assert.ok(phaseControls(e, 3).suggestions('from').includes('ST103'));
 });
 
 test('new phases can connect to either saved endpoint but cannot cross saved stations in either direction', async () => {
@@ -1061,7 +1061,7 @@ test('new phases can connect to either saved endpoint but cannot cross saved sta
   }
 });
 
-test('saved interchange endpoints allow connections on another line but cannot be crossed', async () => {
+test('saved interchange endpoints allow connections and crossing paths on another line', async () => {
   const { elements: e } = await setup();
   e.addPhase.fire('click');
   const first = phaseControls(e, 1);
@@ -1082,15 +1082,15 @@ test('saved interchange endpoints allow connections on another line but cannot b
   second.choose('from', 'ST153');
   second.to.fire('focus');
   assert.ok(second.suggestions('to').includes('ST103'));
-  assert.ok(!second.suggestions('to').includes('ST170'));
+  assert.ok(second.suggestions('to').includes('ST170'));
   second.to.value = stations.find(station => station.properties.id === 'ST170').properties.name;
   second.to.fire('input');
-  assert.equal(e.buildPlan.disabled, true);
+  assert.equal(e.buildPlan.disabled, false);
   removeSaved.fire('click');
   second.to.value = '';
   second.to.fire('input');
   assert.ok(second.suggestions('to').includes('ST103'));
-  assert.ok(second.suggestions('to').includes('ST170'), 'deleting the saved phase releases crossing paths');
+  assert.ok(second.suggestions('to').includes('ST170'), 'deleting blue leaves the valid red crossing available');
   second.choose('to', 'ST170');
   assert.equal(e.buildPlan.disabled, false);
 });
@@ -1142,7 +1142,74 @@ test('saved single-segment endpoints remain selectable but overlapping track is 
   assert.equal(e.buildPlan.disabled, true);
 });
 
-test('construction exclusions accumulate across saved phases and interchange lines', async () => {
+test('interior interchanges stay available on unused lines for searches and map picks in either phase direction', async () => {
+  for (const [from, to] of [['ST100', 'ST106'], ['ST106', 'ST100']]) {
+    const { elements: e, map, errors } = await setup();
+    const interchange = stations.find(station => station.properties.id === 'ST103');
+    const clickInterchange = () => {
+      map.rendered = [interchange];
+      map.events.click({ point: map.project(interchange.geometry.coordinates) });
+    };
+    addSavedPhase(e, 1, from, to);
+    const removeBlue = e.builtPlan.children[1].children.at(-1);
+    e.addPhase.fire('click');
+    const red = phaseControls(e, 2);
+    assert.ok(red.suggestions('from').includes('ST103'));
+    red.pickFrom.fire('click');
+    clickInterchange();
+    assert.equal(red.pickFrom.attributes['aria-pressed'], 'false');
+    assert.equal(red.line.value, 'red');
+    assert.equal(red.line.hidden, true, 'only the unused line is offered');
+    assert.ok(!red.line.children.some(option => option.value === 'blue'));
+    red.choose('to', 'ST170');
+    assert.equal(e.buildPlan.disabled, false);
+    red.choose('from', 'ST153');
+    red.pickTo.fire('click');
+    clickInterchange();
+    assert.equal(red.pickTo.attributes['aria-pressed'], 'false');
+    assert.equal(e.buildPlan.disabled, false, 'interior of blue is a valid red endpoint');
+    red.choose('to', 'ST170');
+    assert.equal(e.buildPlan.disabled, false, 'red can cross the interior of blue');
+    e.buildPlan.fire('click');
+    assert.ok(map.sources['construction-path'].data.features.some(feature => feature.properties.route_id === 'red'));
+    e.addPhase.fire('click');
+    const third = phaseControls(e, 3);
+    assert.ok(!third.suggestions('from').includes('ST103'), 'both lines now contain this interior station');
+    third.pickFrom.fire('click');
+    clickInterchange();
+    assert.equal(third.from.value, '');
+    assert.equal(third.pickFrom.attributes['aria-pressed'], 'true');
+    removeBlue.fire('click');
+    third.from.fire('focus');
+    assert.ok(third.suggestions('from').includes('ST103'));
+    third.choose('from', 'ST103');
+    assert.equal(third.line.value, 'blue', 'only the deleted phase line is released');
+    assert.ok(!third.line.children.some(option => option.value === 'red'));
+    third.choose('to', 'ST106');
+    assert.equal(e.buildPlan.disabled, false);
+    assert.deepEqual(errors, []);
+  }
+});
+
+test('deleting a phase refreshes interchange line options without clearing valid selections on another line', async () => {
+  const { elements: e } = await setup();
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  const remove = e.builtPlan.children[1].children.at(-1);
+  e.addPhase.fire('click');
+  const draft = phaseControls(e, 2);
+  draft.choose('from', 'ST103');
+  assert.equal(draft.line.value, 'red');
+  draft.choose('to', 'ST170');
+  const selectedTo = draft.to.value;
+  remove.fire('click');
+  assert.equal(draft.line.hidden, false);
+  assert.deepEqual(draft.line.children.map(option => option.value).filter(Boolean).sort(), ['blue', 'red']);
+  assert.equal(draft.line.value, 'red');
+  assert.equal(draft.to.value, selectedTo);
+  assert.equal(e.buildPlan.disabled, false);
+});
+
+test('construction exclusions accumulate independently for each line', async () => {
   const { elements: e } = await setup();
   e.addPhase.fire('click');
   const first = phaseControls(e, 1);
@@ -1153,20 +1220,22 @@ test('construction exclusions accumulate across saved phases and interchange lin
   const second = phaseControls(e, 2);
   second.choose('from', 'ST153');
   second.to.fire('focus');
-  assert.ok(!second.suggestions('to').includes('ST103'), 'blue phase excludes shared red interchange');
+  assert.ok(second.suggestions('to').includes('ST103'), 'blue phase does not exclude the red interchange');
   second.choose('to', 'ST156');
   e.buildPlan.fire('click');
   e.addPhase.fire('click');
   const third = phaseControls(e, 3);
-  for (const id of ['ST103', 'ST154', 'ST155']) {
+  for (const id of ['ST154', 'ST155']) {
     assert.ok(!third.suggestions('from').includes(id));
   }
-  for (const id of ['ST100', 'ST106', 'ST153', 'ST156']) {
+  for (const id of ['ST100', 'ST106', 'ST153', 'ST156', 'ST103']) {
     assert.ok(third.suggestions('from').includes(id));
   }
   third.from.value = stations.find(station => station.properties.id === 'ST103').properties.name;
   third.from.fire('input');
-  assert.equal(third.to.disabled, true);
+  assert.equal(third.to.disabled, false);
+  assert.equal(third.line.value, 'red');
+  assert.ok(!third.line.children.some(option => option.value === 'blue'));
   assert.equal(e.buildPlan.disabled, true);
   assert.equal(e.builtPlan.children.length, 3);
 });
@@ -1788,7 +1857,7 @@ test('construction Clear resets only current selections while preserving its num
   assert.match(e.constructionStatus.textContent, /selections cleared/);
   e.clearPlan.fire('click');
   second.from.fire('focus');
-  assert.ok(!second.suggestions('from').includes('ST103'));
+  assert.ok(second.suggestions('from').includes('ST103'));
   assert.ok(second.suggestions('from').includes('ST084'));
   second.choose('from', 'ST084');
   second.choose('to', 'ST088');

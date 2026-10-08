@@ -117,23 +117,32 @@ const ConstructionPlan = (() => {
       return matches.length === 1 ? matches[0] : null;
     }
 
+    function availableRoutes(station) {
+      if (!station) return [];
+      const id = station.properties.id;
+      return routes.filter(route => route.properties.station_ids_in_order.includes(id) &&
+        !builtPhases.some(saved => saved.route.properties.route_id === route.properties.route_id &&
+          saved.path.stationIds.slice(1, -1).includes(id)));
+    }
+
     function result(phase) {
       const route = routeFor(phase);
       const from = selected(phase.from, phase.fromChoices);
       const to = selected(phase.to, phase.choices);
-      if (!route || !from || !to || from.properties.id === to.properties.id) return null;
+      if (!route || !from || !to || from.properties.id === to.properties.id ||
+          !availableRoutes(from).includes(route)) return null;
       return phasePath(network, route, from.properties.id, to.properties.id);
     }
 
     function avoidsOverlap(route, from, to) {
       const path = phasePath(network, route, from, to);
       return builtPhases.every(saved => {
+        if (saved.route.properties.route_id !== route.properties.route_id) return true;
         const shared = path.stationIds.filter(id => saved.path.stationIds.includes(id));
         const endpointsOnly = shared.every(id => (id === from || id === to) &&
           (id === saved.path.stationIds[0] || id === saved.path.stationIds.at(-1)));
         // Sharing both ends on the same line also reuses the track between them.
-        return endpointsOnly &&
-          (saved.route.properties.route_id !== route.properties.route_id || shared.length < 2);
+        return endpointsOnly && shared.length < 2;
       });
     }
 
@@ -196,11 +205,11 @@ const ConstructionPlan = (() => {
     }
 
     function refreshChoices() {
-      const interiors = new Set(builtPhases.flatMap(phase => phase.path.stationIds.slice(1, -1)));
       for (const phase of phases) {
         phase.fromChoices.splice(0, phase.fromChoices.length,
-          ...unopenedStations.filter(station => !interiors.has(station.properties.id)));
+          ...unopenedStations.filter(station => availableRoutes(station).length > 0));
         const from = selected(phase.from, phase.fromChoices);
+        updateLine(phase, from, true);
         const route = routeFor(phase);
         phase.choices.splice(0, phase.choices.length, ...unopenedStations.filter(station =>
           from && route && station.properties.id !== from.properties.id &&
@@ -232,16 +241,14 @@ const ConstructionPlan = (() => {
       status.textContent = phases.length === 0 ? 'Add a phase to begin.' :
         !validNumbers() ? 'Use a different positive whole phase number for each phase.' :
           ready ? 'Phase ready. Click Add to save it before adding another phase.' :
-            'Choose two different stations on one line without overlapping saved phases, except at a shared endpoint.';
+            'Choose two different stations without overlapping saved phases on the same line, except at a shared endpoint.';
       renderMap();
     }
 
-    function updateLine(phase, from) {
-      phase.to.value = '';
-      phase.toSearch.close();
+    function updateLine(phase, from, preserve = false) {
+      const previous = phase.line.value;
       phase.line.replaceChildren();
-      const choices = from ? routes.filter(route =>
-        route.properties.station_ids_in_order.includes(from.properties.id)) : [];
+      const choices = availableRoutes(from);
       if (choices.length !== 1) {
         const placeholder = document.createElement('option');
         placeholder.value = '';
@@ -254,7 +261,12 @@ const ConstructionPlan = (() => {
         option.textContent = route.properties.name;
         phase.line.appendChild(option);
       }
-      phase.line.value = choices.length === 1 ? choices[0].properties.route_id : '';
+      phase.line.value = preserve && choices.some(route => route.properties.route_id === previous) ?
+        previous : choices.length === 1 ? choices[0].properties.route_id : '';
+      if (!preserve || phase.line.value !== previous) {
+        phase.to.value = '';
+        phase.toSearch.close();
+      }
       phase.lineLabel.hidden = choices.length <= 1;
       phase.line.hidden = choices.length <= 1;
     }

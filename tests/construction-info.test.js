@@ -155,3 +155,21 @@ test('explicit interchange connections open only when both endpoints are availab
   assert.equal(completed.graph.get(to).some(edge => edge.to === from), true);
   assert.deepEqual(RailRouting.findRoute(completed, from, to).stationIds, [from, to]);
 });
+
+test('crossing phases share an interior station cost but open their own track only at their completion', () => {
+  const red = data.features.find(feature => feature.properties.feature_type === 'route' &&
+    feature.properties.route_id === 'red');
+  const redPhase = { number: 4, route: red, path: phasePath(network, red, 'ST153', 'ST170') };
+  assert.ok(redPhase.path.stationIds.slice(1, -1).includes('ST103'));
+  const report = ConstructionInfo.calculate([phases[0], redPhase], network);
+  assert.ok(report.phases[0].newStationIds.includes('ST103'));
+  assert.ok(!report.phases[1].newStationIds.includes('ST103'), 'no second charge for the shared station');
+  const projected = ConstructionInfo.projectNetwork(network, report);
+  const first = RailRouting.forYear(projected, report.phases[0].completion.year);
+  assert.ok(first.graph.get('ST103').some(edge => edge.feature.properties.route_id === 'blue'));
+  assert.ok(!first.graph.get('ST103').some(edge => edge.feature.properties.route_id === 'red'));
+  const complete = RailRouting.forYear(projected, report.completion.year);
+  const journey = RailRouting.findRoute(complete, 'ST153', 'ST170');
+  assert.deepEqual(journey.geojson.features, redPhase.path.features);
+  assert.equal(complete.stations.get('ST103').properties.station_opening_year, report.phases[0].completion.year);
+});
