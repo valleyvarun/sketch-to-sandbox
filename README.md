@@ -20,6 +20,9 @@ all geometry, including proposals and sections with unknown opening dates.
 The square play/pause button below the selector starts at 2010, displays each
 year and final plan for one second, and loops. Pause holds the current view;
 playing again restarts at 2010. Using either year arrow stops autoplay.
+Autoplay remains enabled in construction mode: pressing it switches to Travel
+and starts playback from 2010. Returning to Edit construction stops playback,
+restores the final-plan view, and retains saved phases, estimates and the draft.
 
 Lines are split at their existing station vertices. A segment becomes visible
 when both endpoints are open on that specific line, so an earlier interchange
@@ -35,6 +38,8 @@ checkbox settings are preserved.
 The footer checkboxes default to checked. Network controls toggle their routes,
 station dots, and labels; transfer links appear only when both networks are on.
 The station names control toggles black labels for the visible networks.
+The footer checkbox labels show a solid white line beside namma metro and a
+dashed white line beside suburban rail.
 
 Click a visible station dot to open a speech-bubble table with its name,
 coordinates (latitude, longitude), opening date, and opening year.
@@ -152,6 +157,9 @@ the same eligibility rules as its dropdown. The second button is enabled after
 choosing a first station and line. Invalid map picks show a notice and keep
 picking active; Escape or clicking the same button cancels. Editing, clearing,
 building, or switching modes also cancels picking.
+Selected draft endpoints have plain square outlines on the map, with no text.
+They update for dropdown and map selections, respect network visibility, and
+disappear when the draft is added/cleared or Travel mode is entered.
 Unopened line sections outside a phase use darker shades of their original colors
 (half of each RGB channel), rather than turning other lines black. Unopened
 sections assigned to a draft or saved phase keep their original colors, even
@@ -159,9 +167,9 @@ when another line is focused. Stations outside the focused line remain black.
 Completed phase segments and stations are thicker;
 suburban segments retain their dashed style.
 
-Only one phase can be edited at a time. **Build** saves it to the right sidebar,
+Only one phase can be edited at a time. **Add** saves it to the right sidebar,
 with its line, distance, and ordered station list, and clears the editor.
-**Add Phase** then becomes available for the next phase. Each Build appends
+**Add Phase** then becomes available for the next phase. Each Add appends
 to the saved plan rather than replacing it, and all saved phases remain
 highlighted on the map. A new draft does not change previously saved phases.
 These are planning assignments, not changes to recorded opening dates.
@@ -170,10 +178,73 @@ mode, it deletes only that phase and its highlights, keeping other saved phases
 and the current draft unchanged. Its stations become available again unless
 they are opened stations or still included in another saved phase. Remaining
 phase numbers are not changed.
-The trash-can button beside Build clears only the current draft's station and
+The left trash-can button beside Add clears only the current draft's station and
 line selections and its preview highlight. It keeps the phase editor and phase
 number, cancels map picking, and leaves all saved phases and their highlights
 unchanged. It is disabled when there is no current draft.
+
+### Construction estimates and simulated openings
+
+The right sidebar has **Build** and a trash button below the saved phases.
+Build calculates each saved phase's cost, duration and completion month, totals,
+and a vertical timeline showing every year from 2026 to the final completion.
+Only saved phases are included; an unfinished left-side draft is not built.
+After Build, the estimate and timeline appear at the top of the right sidebar.
+Below a divider are the saved phases and Build/trash buttons; below another
+divider are the constants. Each section collapses independently using its
+keyboard-accessible header: `^` means expanded and `>` means collapsed.
+Build opens the estimate section and scrolls it into view; clearing or
+invalidating the estimate hides that section. Travel, Add and Build buttons
+use a lighter blue background.
+The estimate header includes INR/USD and km/mi toggles. These affect only
+estimate display, including each phase and total cost, without rebuilding or
+changing completion dates. INR amounts use crore; USD amounts use millions at
+the fixed illustrative rate INR 90 = USD 1 (shown when USD is selected).
+One mile equals 1.609344 km. Saved phase descriptions and the constants remain
+in their original units. Unit choices persist for the page session, including
+across rebuilds and clearing; switching units does not collapse the section.
+Construction formulas and the crore conversion row are omitted from the UI.
+
+These are invented planning assumptions, not official budgets or schedules:
+
+| Constant | Metro | Suburban rail |
+| --- | --- | --- |
+| Line cost, excluding stations | INR 220 crore/km | INR 40 crore/km |
+| Station cost | INR 100 crore/station | INR 20 crore/station |
+| Setup time | 18 months/phase | 6 months/phase |
+| Line time | 1.5 months/km | 0.5 months/km |
+| Station time | 0.75 months/station | 0.25 months/station |
+
+Cost = new km x line cost + new stations x station cost.
+Duration = ceil(setup months + new km x line time + new stations x station time).
+Phases run **sequentially in added order** from January 2026, regardless of their
+labels. Total cost and months are sums; round duration up per phase, not per
+segment. Line/station work is additive in this simplified duration model.
+No extra setup time is charged for a phase with no new construction.
+Shared station IDs are charged once, to the first phase; recorded stations and
+track opened through 2026 are not charged. Track distances use exact mapped
+segments, not straight-line endpoint distance.
+
+The CSV `datasets/Namma_Metro_by_phase.csv` is a broad plausibility check:
+Phase 1 lists 42.30 km, 41 stations and INR 14,405 crore over 10 years.
+Applying the invented Metro rates gives INR 13,406 crore and 113 months.
+The model is not fitted to every CSV phase (tunnelling and scope vary).
+Suburban rates assume reuse of existing corridors. Land acquisition, inflation,
+financing and detailed engineering are excluded. One crore is INR 10,000,000.
+
+After Build, the year selector includes every projected year after 2026 through
+the last completion, before final plan; projected year labels are light red.
+Year views are year-end snapshots, so a phase becomes available in its completion
+year. Travel routing, searches, map geometry, and explicit walking/interchange
+links use only completed portions plus existing infrastructure. A shared endpoint
+never unlocks unbuilt track. Simulated station opening years are labelled as
+projections in popups; source opening dates are never overwritten.
+
+Adding or deleting a saved phase invalidates estimates and simulated years until
+Build is clicked again. Draft-only edits/clears leave built results intact.
+The right trash button clears all saved phases, the draft, results, timeline,
+and simulated openings, restoring the default 2010-2026/final-plan selector.
+The constant reference remains available.
 
 **Travel mode** disables/greys the construction editor and restores the previous
 travel year and footer settings. Draft phase inputs and the built summary are

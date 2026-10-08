@@ -189,7 +189,6 @@ body {
   opacity: 0.45;
 }
 
-#travelForm #runTravel:enabled,
 #travelForm .pick-button[aria-pressed="true"],
 #constructionEditor .pick-button[aria-pressed="true"] {
   background: #ffffff;
@@ -300,11 +299,6 @@ body {
   justify-content: center;
 }
 
-#constructionEditor #buildPlan:enabled {
-  background: #ffffff;
-  color: #0b1c36;
-}
-
 #constructionStatus,
 #builtPlan p {
   font-size: 0.75rem;
@@ -339,13 +333,16 @@ body {
   overflow-wrap: anywhere;
 }
 
-#travelPanel table {
+#travelPanel table,
+#constructionPanel table {
   width: 100%;
   border-collapse: collapse;
 }
 
 #travelPanel th,
-#travelPanel td {
+#travelPanel td,
+#constructionPanel th,
+#constructionPanel td {
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid #ffffff;
@@ -353,13 +350,15 @@ body {
   font-weight: 300;
 }
 
-#travelPanel h3 {
+#travelPanel h3,
+#constructionPanel h3 {
   font-size: 0.85rem;
   font-weight: 400;
   margin: 12px 0 6px;
 }
 
-#travelPanel p {
+#travelPanel p,
+#constructionPanel p {
   margin-bottom: 8px;
 }
 
@@ -440,7 +439,8 @@ body {
   letter-spacing: normal;
 }
 
-#travelFormulas h4 {
+#travelFormulas h4,
+#constructionPanel h4 {
   font-size: 0.8rem;
   font-weight: 400;
   margin: 12px 0 6px;
@@ -451,6 +451,151 @@ body {
   font-size: 1rem;
   font-weight: 300;
   margin-bottom: 16px;
+}
+
+#constructionPanel {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+#constructionPanel .construction-actions {
+  margin-top: 16px;
+}
+
+#constructionPanel .construction-actions button {
+  padding: 8px 12px;
+  border: 1px solid #ffffff;
+  background: #0b1c36;
+  color: #ffffff;
+  font: inherit;
+}
+
+#calculatePlan {
+  flex: 1;
+}
+
+#constructionPanel button:enabled {
+  cursor: pointer;
+}
+
+#constructionPanel button:disabled {
+  opacity: 0.45;
+}
+
+#travelForm #runTravel,
+#constructionEditor #buildPlan,
+#constructionPanel #calculatePlan {
+  background: #244a73;
+  color: #ffffff;
+}
+
+.construction-group {
+  padding: 12px 0;
+}
+
+.construction-group:not(:last-child) {
+  border-bottom: 1px solid #ffffff;
+}
+
+.construction-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.construction-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.construction-group > summary::after {
+  content: '>';
+}
+
+.construction-group[open] > summary::after {
+  content: '^';
+}
+
+.construction-group[open] > summary {
+  margin-bottom: 12px;
+}
+
+.construction-group > summary:focus-visible {
+  outline: 1px solid #ffffff;
+  outline-offset: 3px;
+}
+
+#constructionEstimate > summary {
+  gap: 6px;
+}
+
+.estimate-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.estimate-units {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.unit-toggle {
+  display: flex;
+  padding: 0;
+  border: 1px solid #ffffff;
+  background: #0b1c36;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.65rem;
+}
+
+.unit-toggle span {
+  padding: 4px 3px;
+}
+
+.unit-toggle[aria-pressed="false"] span:first-child,
+.unit-toggle[aria-pressed="true"] span:last-child {
+  background: #244a73;
+}
+
+.unit-toggle:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.construction-timeline {
+  list-style: none;
+  margin: 12px 0 20px 6px;
+  padding: 0 0 0 18px;
+  border-left: 2px solid #ffffff;
+}
+
+.construction-timeline li {
+  position: relative;
+  min-height: 48px;
+  padding-bottom: 12px;
+}
+
+.construction-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #0b1c36;
+}
+
+#mapYear[data-projected="true"] {
+  color: #ff9999;
 }
 
 .built-phase {
@@ -772,15 +917,25 @@ body {
 }
 
 .footer {
-  height: 55px;
+  min-height: 55px;
   background-color: #0b1c36;
   border-top: 1px solid #ffffff;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start !important;
   gap: 24px;
   flex-shrink: 0;
-  padding: 0 24px;
+  padding: 12px 24px;
+}
+
+.legend-line {
+  width: 36px;
+  border-top: 3px solid #ffffff;
+}
+
+.legend-line-dashed {
+  border-top-style: dashed;
 }
 
 .footer label {

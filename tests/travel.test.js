@@ -45,7 +45,7 @@ class Element {
   getBoundingClientRect() { return { left: 12, top: 150, bottom: 186, width: 140 }; }
   scrollIntoView() {}
   focus() { this.events.focus?.({ target: this }); }
-  fire(event, values = {}) { this.events[event]({ target: this, preventDefault() {}, ...values }); }
+  fire(event, values = {}) { this.events[event]({ target: this, preventDefault() {}, stopPropagation() {}, ...values }); }
 }
 
 async function setup({ failFetch = false, beforeLoad = () => {}, networkData = data } = {}) {
@@ -150,6 +150,7 @@ async function setup({ failFetch = false, beforeLoad = () => {}, networkData = d
   vm.runInContext(fs.readFileSync(path.join(root, 'travel-info.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(root, 'sidebar-resize.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(root, 'station-search.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(root, 'construction-info.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(root, 'construction.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(root, 'script.js'), 'utf8'), context);
   const map = context.initMap('test-token');
@@ -185,6 +186,187 @@ function evaluate(expression, feature) {
   }
 }
 
+function addSavedPhase(elements, index, from, to) {
+  elements.addPhase.fire('click');
+  const phase = phaseControls(elements, index);
+  phase.choose('from', from);
+  phase.choose('to', to);
+  elements.buildPlan.fire('click');
+}
+
+function expectedConstruction(endpoints) {
+  const network = RailRouting.buildNetwork(data);
+  const route = data.features.find(feature =>
+    feature.properties.feature_type === 'route' && feature.properties.route_id === 'blue');
+  return require('../construction-info.js').calculate(endpoints.map(([from, to], i) => ({
+    number: i + 3, route, path: require('../construction.js').phasePath(network, route, from, to)
+  })), network);
+}
+
+test('right Build creates per-phase estimates and yearly timeline, enabling only completed future Travel paths', async () => {
+  const { elements: e, map, choose, popups, errors, advanceTime, timers } = await setup();
+  const text = element => [element.textContent || '', ...element.children.map(text)].join(' ');
+  const expected = expectedConstruction([['ST100', 'ST106'], ['ST106', 'ST110']]);
+  assert.match(html, /id="buildPlan"[^>]*>Add<\/button>/);
+  assert.ok(html.indexOf('id="constructionResult"') < html.indexOf('id="builtPlan"'));
+  assert.ok(html.indexOf('id="builtPlan"') < html.indexOf('id="calculatePlan"'));
+  assert.ok(html.indexOf('id="calculatePlan"') < html.indexOf('id="constructionFormulas"'));
+  assert.equal((html.match(/class="construction-group"/g) || []).length, 3);
+  assert.equal(e.calculatePlan.disabled, true);
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  addSavedPhase(e, 2, 'ST106', 'ST110');
+  assert.equal(e.constructionResult.children.length, 0, 'Add is not Build');
+  e.travelMode.fire('click');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, '2026', 'unbuilt assignments add no years');
+  e.nextYear.fire('click');
+  e.constructionMode.fire('click');
+  assert.equal(e.constructionPanel.hidden, false);
+  e.calculatePlan.fire('click');
+  assert.equal(e.constructionEstimate.hidden, false);
+  assert.equal(e.constructionEstimate.open, true);
+  assert.match(text(e.constructionResult), new RegExp(`${expected.totalMonths} months`));
+  assert.ok(text(e.constructionResult).includes(`INR ${expected.totalCost.toFixed(2)} crore`));
+  for (const phase of expected.phases) {
+    assert.ok(text(e.constructionResult).includes(`INR ${phase.cost.toFixed(2)} crore`));
+    assert.ok(text(e.constructionResult).includes(phase.completion.label));
+  }
+  const timeline = e.constructionResult.children.find(child => child.className === 'construction-timeline');
+  assert.deepEqual(timeline.children.map(child => child.children[0].textContent),
+    Array.from({ length: expected.completion.year - 2026 + 1 }, (_, i) => String(2026 + i)));
+  e.constructionEstimate.open = false;
+  e.calculatePlan.fire('click');
+  assert.equal(e.constructionEstimate.open, true, 'Build reopens a collapsed estimate');
+  assert.equal(e.constructionResult.children.filter(child => child.className === 'construction-timeline').length, 1);
+  e.travelMode.fire('click');
+  assert.equal(e.constructionPanel.hidden, true);
+  assert.equal(e.calculatePlan.disabled, true);
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, String(expected.completion.year));
+  assert.equal(e.mapYear.attributes['data-projected'], 'true');
+  choose('fromStation', 'ST100');
+  choose('toStation', 'ST110');
+  e.travelForm.fire('submit');
+  assert.equal(map.sources['travel-path'].data.features.length, 10);
+  for (let year = expected.completion.year; year > expected.phases[0].completion.year; year--) {
+    e.previousYear.fire('click');
+  }
+  assert.equal(map.sources['rail-network'].data.features.some(feature => feature.properties.id === 'ST110'), false);
+  choose('fromStation', 'ST100');
+  choose('toStation', 'ST106');
+  e.travelForm.fire('submit');
+  assert.equal(map.sources['travel-path'].data.features.length, 6);
+  const station = stations.find(station => station.properties.id === 'ST100');
+  map.rendered = [station];
+  map.events.click({ point: map.project(station.geometry.coordinates) });
+  assert.match(text(popups.at(-1).content), /Simulated opening year/);
+  assert.match(text(popups.at(-1).content), /not a recorded/);
+  while (Number(e.mapYear.textContent) > 2026) e.previousYear.fire('click');
+  assert.equal(e.mapYear.attributes['data-projected'], 'false');
+  assert.equal(map.sources['rail-network'].data.features.some(feature => feature.properties.id === 'ST100'), false);
+  e.autoplayYears.fire('click');
+  advanceTime((expected.completion.year - 2010) * 1000);
+  assert.equal(e.mapYear.textContent, String(expected.completion.year));
+  advanceTime(1000);
+  assert.equal(e.mapYear.textContent, 'final plan');
+  advanceTime(1000);
+  assert.equal(e.mapYear.textContent, '2010');
+  e.autoplayYears.fire('click');
+  assert.equal(timers.size, 0);
+  assert.deepEqual(errors, []);
+});
+
+test('draft Clear preserves a built forecast; the right trash button removes the entire simulation and resets years', async () => {
+  const { elements: e, map, errors } = await setup();
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  e.calculatePlan.fire('click');
+  const savedResult = e.constructionResult.children[0];
+  e.addPhase.fire('click');
+  const draft = phaseControls(e, 2);
+  draft.choose('from', 'ST106');
+  draft.choose('to', 'ST110');
+  e.clearPlan.fire('click');
+  assert.equal(e.constructionResult.children[0], savedResult);
+  assert.equal(e.builtPlan.children.length, 2);
+  assert.equal(e.phaseList.children.length, 1);
+  e.clearBuiltPlan.fire('click');
+  assert.equal(e.phaseList.children.length, 0);
+  assert.equal(e.builtPlan.children.length, 1);
+  assert.equal(e.constructionResult.children.length, 0);
+  assert.equal(e.constructionEstimate.hidden, true);
+  assert.equal(map.sources['construction-path'].data.features.length, 0);
+  assert.equal(e.calculatePlan.disabled, true);
+  assert.equal(e.clearBuiltPlan.disabled, true);
+  assert.ok(e.constructionFormulas.children.length > 0, 'constant reference stays available');
+  e.travelMode.fire('click');
+  assert.equal(e.mapYear.textContent, 'final plan');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, '2026');
+  assert.equal(e.mapYear.attributes['data-projected'], 'false');
+  assert.equal(map.sources['rail-network'].data.features.some(feature => feature.properties.id === 'ST100'), false);
+  e.addPhase.fire('click');
+  assert.equal(phaseControls(e, 1).number.value, '3', 'default phase numbering restored');
+  assert.deepEqual(errors, []);
+});
+
+test('adding or deleting saved phases invalidates forecasts and Build recomputes the remaining plan', async () => {
+  const { elements: e, errors } = await setup();
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  e.calculatePlan.fire('click');
+  addSavedPhase(e, 2, 'ST106', 'ST110');
+  assert.equal(e.constructionResult.children.length, 0);
+  e.travelMode.fire('click');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, '2026');
+  e.nextYear.fire('click');
+  e.constructionMode.fire('click');
+  e.calculatePlan.fire('click');
+  e.builtPlan.children[1].children.at(-1).fire('click');
+  assert.equal(e.constructionResult.children.length, 0);
+  e.travelMode.fire('click');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, '2026');
+  e.nextYear.fire('click');
+  e.constructionMode.fire('click');
+  e.calculatePlan.fire('click');
+  const tables = e.constructionResult.children.filter(child => child.tagName === 'table');
+  const rows = Object.fromEntries(tables[0].children.map(row => row.children.map(cell => cell.textContent)));
+  assert.equal(rows['New stations'], '5', 'formerly shared endpoint is now charged to the remaining phase');
+  const remaining = expectedConstruction([['ST106', 'ST110']]);
+  assert.equal(rows.Cost, `INR ${remaining.totalCost.toFixed(2)} crore`);
+  e.travelMode.fire('click');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, String(remaining.completion.year));
+  assert.deepEqual(errors, []);
+});
+
+test('a short suburban phase completed in 2026 is labelled simulated rather than recorded', async () => {
+  const { elements: e, map, errors } = await setup();
+  const route = data.features.find(feature => feature.properties.feature_type === 'route' &&
+    feature.properties.system === 'suburban');
+  const [from, to] = route.properties.station_ids_in_order;
+  e.addPhase.fire('click');
+  const phase = phaseControls(e, 1);
+  phase.choose('from', from);
+  if (!phase.line.hidden) {
+    phase.line.value = route.properties.route_id;
+    phase.line.fire('change');
+  }
+  phase.choose('to', to);
+  e.buildPlan.fire('click');
+  e.calculatePlan.fire('click');
+  e.travelMode.fire('click');
+  e.previousYear.fire('click');
+  assert.equal(e.mapYear.textContent, '2026');
+  assert.match(e.travelStatus.textContent, /Projected openings/);
+  assert.ok(map.sources['rail-network'].data.features.some(feature =>
+    feature.properties.id === from && feature.properties.simulated_opening));
+  e.previousYear.fire('click');
+  assert.equal(map.sources['rail-network'].data.features.some(feature =>
+    feature.properties.id === from), false);
+  assert.deepEqual(errors, []);
+});
+
 function descendant(element, id) {
   if (element.id === id) return element;
   for (const child of element.children) {
@@ -192,6 +374,125 @@ function descendant(element, id) {
     if (found) return found;
   }
 }
+
+test('construction unit toggles convert every phase and total without changing dates, map, or collapse state', async () => {
+  const { elements: e, map, errors } = await setup();
+  const text = element => [element.textContent || '', ...element.children.map(text)].join(' ');
+  const rows = () => e.constructionResult.children.filter(child => child.tagName === 'table')
+    .map(table => Object.fromEntries(table.children.map(row => row.children.map(cell => cell.textContent))));
+  const expected = expectedConstruction([['ST100', 'ST106'], ['ST106', 'ST110']]);
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  addSavedPhase(e, 2, 'ST106', 'ST110');
+  e.calculatePlan.fire('click');
+  const originalRows = rows();
+  const originalMap = map.sources['rail-network'].data;
+  const originalConstants = text(e.constructionFormulas);
+  const originalPhases = text(e.builtPlan);
+  assert.equal(e.estimateCurrency.attributes['aria-pressed'], 'false');
+  assert.equal(e.estimateDistance.attributes['aria-pressed'], 'false');
+  let prevented = false;
+  let stopped = false;
+  e.estimateCurrency.fire('click', {
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; }
+  });
+  assert.ok(prevented && stopped, 'unit toggle does not activate the summary collapse action');
+  assert.equal(e.constructionEstimate.open, true);
+  assert.equal(e.estimateCurrency.attributes['aria-pressed'], 'true');
+  assert.match(text(e.constructionResult), /Assumed exchange rate: INR 90 = USD 1 \(not live\)/);
+  rows().forEach((row, i) => {
+    const cost = i < expected.phases.length ? expected.phases[i].cost : expected.totalCost;
+    assert.equal(row.Cost, `USD ${(cost / 9).toFixed(2)} million`);
+    assert.equal(row.Duration, originalRows[i].Duration);
+    assert.equal(row.Complete, originalRows[i].Complete);
+    assert.equal(row['New line'], originalRows[i]['New line']);
+  });
+  e.constructionEstimate.open = false;
+  e.estimateDistance.fire('click');
+  assert.equal(e.constructionEstimate.open, false);
+  assert.equal(e.estimateDistance.attributes['aria-pressed'], 'true');
+  expected.phases.forEach((phase, i) => {
+    assert.equal(rows()[i]['New line'], `${(phase.km / 1.609344).toFixed(2)} mi`);
+  });
+  assert.equal(map.sources['rail-network'].data, originalMap);
+  assert.equal(text(e.constructionFormulas), originalConstants);
+  assert.equal(text(e.builtPlan), originalPhases);
+  e.calculatePlan.fire('click');
+  assert.match(rows()[0].Cost, /^USD /, 'rebuild retains units');
+  assert.match(rows()[0]['New line'], / mi$/);
+  e.estimateCurrency.fire('click');
+  e.estimateDistance.fire('click');
+  assert.deepEqual(rows(), originalRows, 'round trips do not accumulate rounding errors');
+  assert.doesNotMatch(text(e.constructionResult), /Assumed exchange rate/);
+  e.clearBuiltPlan.fire('click');
+  e.estimateCurrency.fire('click');
+  assert.equal(e.constructionResult.children.length, 0, 'cleared reports cannot be revived by unit changes');
+  assert.equal(e.constructionEstimate.hidden, true);
+  assert.deepEqual(errors, []);
+});
+
+test('construction reference shows constants without formulas, crore conversion or removed notes', async () => {
+  const { elements: e } = await setup();
+  const text = element => [element.textContent || '', ...element.children.map(text)].join(' ');
+  const reference = text(e.constructionFormulas);
+  assert.match(html, /<summary>Construction constants<\/summary>/);
+  assert.doesNotMatch(reference, /Cost =|Months =|Total cost =|Total months =|1 crore|10,000,000/);
+  assert.doesNotMatch(reference, /Existing track and stations|shared stations|year-end|opens at completion|inflation|land acquisition|financing/);
+  const table = e.constructionFormulas.children.find(child => child.tagName === 'table');
+  assert.equal(table.children.length, 11);
+  assert.match(reference, /220 crore\/km/);
+  assert.match(reference, /40 crore\/km/);
+  assert.match(reference, /Sequential phases in added order\. Months round up\./);
+});
+
+test('construction draft endpoints have unlabelled squares that follow selections, visibility and mode changes', async () => {
+  const { elements: e, map, markers, choose, errors } = await setup();
+  const squares = () => markers.filter(marker => !marker.removed);
+  const coordinates = id => stations.find(station => station.properties.id === id).geometry.coordinates;
+  e.addPhase.fire('click');
+  const first = phaseControls(e, 1);
+  first.choose('from', 'ST100');
+  assert.equal(squares().length, 1);
+  assert.deepEqual(squares()[0].coordinates, coordinates('ST100'));
+  first.pickTo.fire('click');
+  map.rendered = [stations.find(station => station.properties.id === 'ST106')];
+  map.events.click({ point: map.project(coordinates('ST106')) });
+  assert.deepEqual(squares().map(marker => marker.coordinates), [coordinates('ST100'), coordinates('ST106')]);
+  assert.ok(squares().every(marker => marker.element.className === 'endpoint-marker' && marker.element.children.length === 0));
+  e.showMetro.checked = false;
+  e.showMetro.fire('change');
+  assert.ok(squares().every(marker => marker.element.hidden));
+  e.showMetro.checked = true;
+  e.showMetro.fire('change');
+  assert.ok(squares().every(marker => !marker.element.hidden));
+  first.to.value = 'Not a station';
+  first.to.fire('input');
+  assert.equal(squares().length, 1);
+  e.clearPlan.fire('click');
+  assert.equal(squares().length, 0);
+  first.choose('from', 'ST100');
+  first.choose('to', 'ST106');
+  e.buildPlan.fire('click');
+  assert.equal(squares().length, 0, 'Add removes draft outlines but preserves phase highlights');
+  assert.ok(map.sources['construction-path'].data.features.length > 0);
+  e.addPhase.fire('click');
+  const second = phaseControls(e, 2);
+  second.choose('from', 'ST106');
+  second.choose('to', 'ST110');
+  assert.equal(squares().length, 2);
+  e.travelMode.fire('click');
+  assert.equal(squares().length, 0);
+  choose('fromStation', 'ST001');
+  choose('toStation', 'ST037');
+  e.travelForm.fire('submit');
+  assert.deepEqual(squares().map(marker => marker.element.children[0].textContent), ['Start', 'End'],
+    'Travel endpoint captions remain unchanged');
+  e.constructionMode.fire('click');
+  assert.deepEqual(squares().map(marker => marker.coordinates), [coordinates('ST106'), coordinates('ST110')]);
+  assert.ok(squares().every(marker => marker.element.children.length === 0));
+  e.clearBuiltPlan.fire('click');
+  assert.equal(squares().length, 0);
+  assert.deepEqual(errors, []);
+});
 
 function assertDarker(actual, original) {
   assert.match(actual, /^#[0-9a-f]{6}$/i);
@@ -245,7 +546,7 @@ test('Add Phase enters final-plan construction mode and clears and disables Trav
   assert.equal(e.toStation.disabled, true);
   assert.equal(e.runTravel.disabled, true);
   assert.equal(e.travelForm.attributes['aria-disabled'], 'true');
-  assert.equal(e.autoplayYears.disabled, true);
+  assert.equal(e.autoplayYears.disabled, false);
   assert.equal(e.previousYear.disabled, true);
   assert.equal(e.constructionMode.attributes['aria-pressed'], 'true');
   assert.equal(map.sources['travel-path'].data.features.length, 0);
@@ -427,7 +728,7 @@ test('construction limits the second search to one line and asks for an intercha
   assert.equal(map.sources['construction-path'].data.features.length, 0);
 });
 
-test('Build appends one phase at a time, resets the editor, and preserves saved and draft work across modes', async () => {
+test('Add appends one phase at a time, resets the editor, and preserves saved and draft work across modes', async () => {
   const { elements: e, map, choose, documentEvents } = await setup();
   const initialListeners = documentEvents.pointerdown.listeners.size;
   e.previousYear.fire('click');
@@ -441,7 +742,7 @@ test('Build appends one phase at a time, resets the editor, and preserves saved 
   first.number.fire('input');
   assert.equal(e.addPhase.hidden, true);
   e.addPhase.fire('click');
-  assert.equal(e.phaseList.children.length, 1, 'cannot add another draft before Build');
+  assert.equal(e.phaseList.children.length, 1, 'cannot add another draft before Add');
   e.buildPlan.fire('click');
   assert.equal(e.phaseList.children.length, 0);
   assert.equal(e.addPhase.hidden, false);
@@ -452,7 +753,7 @@ test('Build appends one phase at a time, resets the editor, and preserves saved 
   const firstFeatures = structuredClone(map.sources['construction-path'].data.features);
   assert.equal(firstFeatures.length, 6);
   e.buildPlan.fire('click');
-  assert.equal(e.builtPlan.children.length, 2, 'repeated Build does not duplicate a phase');
+  assert.equal(e.builtPlan.children.length, 2, 'repeated Add does not duplicate a phase');
   e.addPhase.fire('click');
   const second = phaseControls(e, 2);
   assert.equal(second.number.value, '8');
@@ -468,7 +769,7 @@ test('Build appends one phase at a time, resets the editor, and preserves saved 
   second.number.fire('input');
   e.buildPlan.fire('click');
   assert.equal(e.phaseList.children.length, 0);
-  assert.equal(e.builtPlan.children[0].textContent, '2 phases built.');
+  assert.equal(e.builtPlan.children[0].textContent, '2 phases added.');
   assert.equal(e.builtPlan.children.length, 3);
   assert.equal(e.builtPlan.children[1].children[0].textContent, 'Phase 7');
   assert.equal(e.builtPlan.children[2].children[0].textContent, 'Phase 8');
@@ -510,7 +811,7 @@ test('Build appends one phase at a time, resets the editor, and preserves saved 
   e.buildPlan.fire('click');
   assert.equal(e.builtPlan.children[1].children[0].textContent, 'Phase 7');
   assert.equal(e.builtPlan.children[3].children[0].textContent, 'Phase 10');
-  assert.equal(e.builtPlan.children[0].textContent, '3 phases built.');
+  assert.equal(e.builtPlan.children[0].textContent, '3 phases added.');
   assert.equal(e.phaseList.children.length, 0);
   assert.equal(documentEvents.pointerdown.listeners.size, initialListeners);
 });
@@ -544,7 +845,7 @@ test('deleting a saved phase preserves other phases and the draft and releases i
   assert.equal(map.canvas.style.cursor, '');
   assert.equal(draft.pickTo.attributes['aria-pressed'], 'false');
   assert.equal(e.builtPlan.children.length, 2);
-  assert.equal(e.builtPlan.children[0].textContent, '1 phase built.');
+  assert.equal(e.builtPlan.children[0].textContent, '1 phase added.');
   assert.equal(e.builtPlan.children[1], secondSection);
   assert.equal(secondSection.children[0].textContent, 'Phase 4');
   assert.equal(e.phaseList.children.length, 1);
@@ -603,7 +904,7 @@ test('individual deletion retains shared highlights, is disabled in Travel, and 
   assert.ok(!draft.suggestions('from').includes('ST102'));
   removeSecond.fire('click');
   assert.ok(draft.suggestions('from').includes('ST102'), 'open dropdown updates when last covering phase is removed');
-  assert.equal(e.builtPlan.children[0].textContent, 'No plan built yet.');
+  assert.equal(e.builtPlan.children[0].textContent, 'No phases added yet.');
   assert.equal(map.sources['construction-path'].data.features.length, 0);
   assert.equal(e.clearPlan.disabled, false, 'the empty draft can still be cleared');
   draft.choose('from', 'ST100');
@@ -612,7 +913,7 @@ test('individual deletion retains shared highlights, is disabled in Travel, and 
   assert.equal(e.builtPlan.children[1].children[0].textContent, 'Phase 5');
   e.builtPlan.children[1].children.at(-1).fire('click');
   assert.equal(e.builtPlan.children.length, 1);
-  assert.equal(e.builtPlan.children[0].textContent, 'No plan built yet.');
+  assert.equal(e.builtPlan.children[0].textContent, 'No phases added yet.');
   assert.equal(e.phaseList.children.length, 0);
   assert.equal(e.addPhase.hidden, false);
   assert.equal(e.buildPlan.disabled, true);
@@ -684,7 +985,7 @@ test('new phase searches exclude saved stations and draft edits leave the saved 
   assert.equal(second.to.value, '');
   assert.equal(e.buildPlan.disabled, true);
   assert.equal(e.builtPlan.children[1], saved);
-  assert.equal(e.builtPlan.children[0].textContent, '1 phase built.');
+  assert.equal(e.builtPlan.children[0].textContent, '1 phase added.');
   assert.deepEqual(structuredClone(map.sources['construction-path'].data.features), savedFeatures);
   assert.equal(second.to.disabled, false);
   second.choose('to', 'ST110');
@@ -737,7 +1038,7 @@ test('new phases can connect to either saved endpoint but cannot cross saved sta
     assert.ok(!third.suggestions('to').includes('ST104'));
     third.choose('to', 'ST108');
     e.buildPlan.fire('click');
-    assert.equal(e.builtPlan.children[0].textContent, '3 phases built.');
+    assert.equal(e.builtPlan.children[0].textContent, '3 phases added.');
     const features = map.sources['construction-path'].data.features;
     assert.equal(features.length, 8);
     const segments = features.map(feature => JSON.stringify(
@@ -1456,7 +1757,7 @@ test('construction Clear resets only current selections while preserving its num
   assert.equal(second.pickTo.disabled, true);
   assert.equal(descendant(e.phaseList, 'phase-2-to-suggestions').hidden, true);
   assert.equal(e.builtPlan.children.length, 2);
-  assert.equal(e.builtPlan.children[0].textContent, '1 phase built.');
+  assert.equal(e.builtPlan.children[0].textContent, '1 phase added.');
   assert.equal(e.builtPlan.children[1], savedSection);
   assert.equal(e.addPhase.hidden, true);
   assert.equal(e.buildPlan.disabled, true);
@@ -1500,6 +1801,50 @@ test('loading failures are visible and do not enable routing', async () => {
   assert.equal(elements.clearPlan.disabled, true);
   assert.equal(elements.constructionMode.disabled, true);
   assert.equal(errors.length, 1);
+});
+
+test('autoplay switches construction to Travel and stops when construction resumes without losing the plan', async () => {
+  const { elements: e, timers, advanceTime, errors } = await setup();
+  addSavedPhase(e, 1, 'ST100', 'ST106');
+  e.calculatePlan.fire('click');
+  const report = e.constructionResult.children[0];
+  const saved = e.builtPlan.children[1];
+  e.addPhase.fire('click');
+  const draft = phaseControls(e, 2);
+  draft.choose('from', 'ST106');
+  draft.choose('to', 'ST110');
+  const from = draft.from.value;
+  const to = draft.to.value;
+  assert.equal(e.autoplayYears.disabled, false);
+  e.autoplayYears.fire('click');
+  assert.equal(e.travelMode.attributes['aria-pressed'], 'true');
+  assert.equal(e.constructionMode.attributes['aria-pressed'], 'false');
+  assert.equal(e.travelPanel.hidden, false);
+  assert.equal(e.constructionPanel.hidden, true);
+  assert.equal(e.fromStation.disabled, false);
+  assert.equal(e.mapYear.textContent, '2010');
+  assert.equal(e.autoplayYears.attributes['aria-pressed'], 'true');
+  assert.equal(timers.size, 1);
+  advanceTime(1000);
+  assert.equal(e.mapYear.textContent, '2011');
+  e.constructionMode.fire('click');
+  assert.equal(timers.size, 0);
+  assert.equal(e.autoplayYears.disabled, false);
+  assert.equal(e.autoplayYears.attributes['aria-pressed'], 'false');
+  assert.equal(e.autoplayYears.attributes['aria-label'], 'Play years');
+  assert.equal(e.mapYear.textContent, 'final plan');
+  advanceTime(3000);
+  assert.equal(e.mapYear.textContent, 'final plan');
+  assert.equal(e.builtPlan.children[1], saved);
+  assert.equal(e.constructionResult.children[0], report);
+  assert.equal(draft.from.value, from);
+  assert.equal(draft.to.value, to);
+  e.autoplayYears.fire('click');
+  assert.equal(e.mapYear.textContent, '2010');
+  assert.equal(timers.size, 1);
+  e.autoplayYears.fire('click');
+  assert.equal(timers.size, 0);
+  assert.deepEqual(errors, []);
 });
 
 test('autoplay holds each year for one second, loops, pauses, and cleans up its timer', async () => {

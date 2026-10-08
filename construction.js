@@ -10,6 +10,7 @@ const ConstructionPlan = (() => {
     const stationIds = [from];
     const features = [];
     const openingYears = [];
+    const segmentMeters = [];
     let meters = 0;
     for (let i = start; i !== end; i += step) {
       const edge = network.graph.get(ids[i]).find(candidate =>
@@ -26,12 +27,13 @@ const ConstructionPlan = (() => {
       });
       stationIds.push(ids[i + step]);
       openingYears.push(edge.openingYear);
+      segmentMeters.push(edge.meters);
       meters += edge.meters;
     }
-    return { stationIds, features, openingYears, meters };
+    return { stationIds, features, openingYears, segmentMeters, meters };
   }
 
-  function create({ map, data, network, stationValue, activate, refreshVisibility, startPicking, cancelPicking }) {
+  function create({ map, data, network, stationValue, activate, refreshVisibility, startPicking, cancelPicking, publish, showEndpoints }) {
     const phases = [];
     const builtPhases = [];
     const routes = data.features.filter(feature => feature.properties.feature_type === 'route');
@@ -44,6 +46,10 @@ const ConstructionPlan = (() => {
     const editor = document.getElementById('constructionEditor');
     const status = document.getElementById('constructionStatus');
     const summary = document.getElementById('builtPlan');
+    const calculate = document.getElementById('calculatePlan');
+    const clearBuilt = document.getElementById('clearBuiltPlan');
+    const buildStatus = document.getElementById('buildStatus');
+    const info = ConstructionInfo.create();
     let active = false;
     let focusedLine = null;
 
@@ -144,6 +150,9 @@ const ConstructionPlan = (() => {
 
     function renderMap() {
       if (!active) return;
+      showEndpoints(phases.flatMap(phase => [
+        selected(phase.from, phase.fromChoices), selected(phase.to, phase.choices)
+      ]).filter(Boolean));
       const selectedIds = new Set();
       const highlighted = [];
       const paths = [...builtPhases.map(phase => phase.path), ...phases.map(result)];
@@ -213,6 +222,8 @@ const ConstructionPlan = (() => {
       add.disabled = false;
       build.disabled = !active || !ready;
       clear.disabled = !active || phases.length === 0;
+      calculate.disabled = !active || builtPhases.length === 0;
+      clearBuilt.disabled = !active || (builtPhases.length === 0 && phases.length === 0);
       phases.forEach(phase => {
         phase.card.disabled = !active;
         phase.legend.textContent = phase.number.value ? `Phase ${phase.number.value}` : 'New phase';
@@ -220,7 +231,7 @@ const ConstructionPlan = (() => {
       builtPhases.forEach(phase => { phase.removeButton.disabled = !active; });
       status.textContent = phases.length === 0 ? 'Add a phase to begin.' :
         !validNumbers() ? 'Use a different positive whole phase number for each phase.' :
-          ready ? 'Phase ready. Click Build to save it before adding another phase.' :
+          ready ? 'Phase ready. Click Add to save it before adding another phase.' :
             'Choose two different stations on one line without overlapping saved phases, except at a shared endpoint.';
       renderMap();
     }
@@ -385,9 +396,43 @@ const ConstructionPlan = (() => {
 
     function updateSummaryCount() {
       summary.children[0].textContent = builtPhases.length ?
-        `${builtPhases.length} phase${builtPhases.length === 1 ? '' : 's'} built.` :
-        'No plan built yet.';
+        `${builtPhases.length} phase${builtPhases.length === 1 ? '' : 's'} added.` :
+        'No phases added yet.';
     }
+
+    function invalidate(reset = false) {
+      info.clear();
+      publish(null, reset);
+      buildStatus.textContent = builtPhases.length ? 'Click Build to calculate and apply the saved phases.' : '';
+    }
+
+    calculate.addEventListener('click', () => {
+      if (!active || !builtPhases.length) return;
+      cancelPicking();
+      try {
+        const report = ConstructionInfo.calculate(builtPhases, network);
+        publish(report);
+        info.show(report);
+        buildStatus.textContent = 'Built simulation. Switch to Travel to explore the projected years.';
+      } catch (error) {
+        console.error('Construction estimate error:', error);
+        invalidate();
+        buildStatus.textContent = error.message;
+      }
+    });
+
+    clearBuilt.addEventListener('click', () => {
+      if (!active) return;
+      clearDraft();
+      builtPhases.forEach(phase => { phase.removeButton.disabled = true; });
+      builtPhases.length = 0;
+      summary.replaceChildren();
+      summary.appendChild(document.createElement('p'));
+      updateSummaryCount();
+      invalidate(true);
+      refresh();
+      buildStatus.textContent = 'Plan cleared. Default map years restored.';
+    });
 
     build.addEventListener('click', () => {
       if (!active || !allReady()) {
@@ -430,12 +475,14 @@ const ConstructionPlan = (() => {
         builtPhases.splice(builtPhases.indexOf(saved), 1);
         summary.removeChild(section);
         updateSummaryCount();
+        invalidate();
         focusedLine = null;
         refresh();
         status.textContent = `Phase ${saved.number} deleted. Other phases and the current draft are unchanged.`;
       });
       section.appendChild(removeButton);
       summary.appendChild(section);
+      invalidate();
       clearDraft();
       refresh();
       status.textContent = `Phase ${saved.number} saved. Add another phase or review the plan on the right.`;

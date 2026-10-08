@@ -10,8 +10,10 @@ function initMap(token) {
   const travelInfo = TravelInfo.create();
   const travelPanel = document.getElementById('travelPanel');
   const builtPlan = document.getElementById('builtPlan');
+  const constructionPanel = document.getElementById('constructionPanel');
   travelPanel.hidden = false;
   builtPlan.hidden = true;
+  constructionPanel.hidden = true;
   status.textContent = 'Loading map and station network...';
 
   const map = new mapboxgl.Map({
@@ -28,8 +30,9 @@ function initMap(token) {
     if (!response.ok) throw new Error(`Could not load station data (HTTP ${response.status}).`);
     const data = await response.json();
     const network = RailRouting.buildNetwork(data);
+    let simulationNetwork = network;
     let visibleNetwork = network;
-    const years = [...Array.from({ length: 17 }, (_, i) => 2010 + i), null];
+    let years = [...Array.from({ length: 17 }, (_, i) => 2010 + i), null];
     let yearIndex = years.length - 1;
     // Use our station labels rather than a second, uncontrolled set from the basemap.
     map.getStyle().layers.filter(layer =>
@@ -42,7 +45,7 @@ function initMap(token) {
     let stationInfo = null;
     let construction = null;
     let constructionActive = false;
-    let travelYearIndex = yearIndex;
+    let travelYear = null;
     let travelVisibility = null;
 
     function closeStationInfo() {
@@ -63,7 +66,7 @@ function initMap(token) {
         ['Name', properties.name],
         ['Coordinates (lat, lon)', `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`],
         ['Opening date', properties.station_opening_date ?? '-'],
-        ['Opening year', properties.station_opening_year ?? '-']
+        [properties.simulated_opening ? 'Simulated opening year' : 'Opening year', properties.station_opening_year ?? '-']
       ];
       for (const [label, value] of rows) {
         const row = document.createElement('tr');
@@ -78,7 +81,9 @@ function initMap(token) {
       }
       content.appendChild(table);
       const note = document.createElement('p');
-      note.textContent = 'Dates refer to the earliest recorded passenger-service opening, not construction completion.';
+      note.textContent = properties.simulated_opening ?
+        'Projected opening from your construction plan, not a recorded passenger-service opening.' :
+        'Dates refer to the earliest recorded passenger-service opening, not construction completion.';
       if (properties.opening_date_conflict) {
         note.textContent += ' The source reports conflicting opening dates.';
       }
@@ -242,12 +247,30 @@ function initMap(token) {
       if (stationInfo && !systems.includes(stationInfo.station.properties.system)) closeStationInfo();
     }
 
+    function showEndpoints(stations, labels = []) {
+      endpointMarkers.forEach(({ marker }) => marker.remove());
+      endpointMarkers = [];
+      stations.forEach((station, i) => {
+        const element = document.createElement('div');
+        element.className = 'endpoint-marker';
+        element.setAttribute('aria-label', labels[i] ?
+          `${labels[i]}: ${station.properties.name}` : station.properties.name);
+        if (labels[i]) {
+          const caption = document.createElement('span');
+          caption.textContent = labels[i];
+          element.appendChild(caption);
+        }
+        const marker = new mapboxgl.Marker({ element })
+          .setLngLat(station.geometry.coordinates).addTo(map);
+        endpointMarkers.push({ marker, station });
+      });
+    }
+
     function clearRoute() {
       activeRoute = null;
       travelInfo.clear();
       map.getSource('travel-path').setData(emptyPath);
-      endpointMarkers.forEach(({ marker }) => marker.remove());
-      endpointMarkers = [];
+      showEndpoints([]);
       routeLayers.forEach(layer => {
         map.setPaintProperty(layer.id, 'line-color', layer.paint['line-color']);
         map.setPaintProperty(layer.id, 'line-width', layer.paint['line-width']);
@@ -321,7 +344,7 @@ function initMap(token) {
       if (index < 0 || index >= years.length) return;
       yearIndex = index;
       const year = years[yearIndex];
-      visibleNetwork = RailRouting.forYear(network, year);
+      visibleNetwork = RailRouting.forYear(simulationNetwork, year);
       searches.forEach(search => search.close());
       setPicking(null);
       closeStationInfo();
@@ -335,9 +358,12 @@ function initMap(token) {
       map.getSource('rail-network').setData(year === null ? data : RailRouting.toGeoJSON(visibleNetwork));
       mapYear.textContent = year === null ? 'final plan' : String(year);
       mapYear.setAttribute('data-final-plan', String(year === null));
+      mapYear.setAttribute('data-projected', String(year !== null && year > 2026));
       previousYear.disabled = yearIndex === 0;
       nextYear.disabled = yearIndex === years.length - 1;
       status.textContent = year === null ? 'Final plan: all routes, including proposals.' :
+        simulationNetwork !== network && year >= 2026 ?
+          `Projected openings through ${year}. Routes include completed construction phases.` :
         visibleNetwork.stations.size ?
           `Recorded openings through ${year}. Routes use only this year's network.` :
           `No stations are recorded as open by ${year}.`;
@@ -351,7 +377,7 @@ function initMap(token) {
       changeYear(yearIndex + 1);
     });
     autoplay.addEventListener('click', () => {
-      if (constructionActive) return;
+      if (constructionActive) setMode(false);
       if (autoplayTimer !== null) {
         stopAutoplay();
         return;
@@ -384,7 +410,7 @@ function initMap(token) {
       toInput.value = '';
       clearRoute();
       if (useConstruction) {
-        travelYearIndex = yearIndex;
+        travelYear = years[yearIndex];
         travelVisibility = [metro.checked, suburban.checked, stationNames.checked];
         changeYear(years.length - 1);
         metro.checked = true;
@@ -393,12 +419,13 @@ function initMap(token) {
       constructionActive = useConstruction;
       travelPanel.hidden = useConstruction;
       builtPlan.hidden = !useConstruction;
+      constructionPanel.hidden = !useConstruction;
       construction.setActive(useConstruction);
       if (!useConstruction) {
         [metro.checked, suburban.checked, stationNames.checked] = travelVisibility;
         map.setPaintProperty('rail-stations', 'circle-radius', 4);
         map.setPaintProperty('rail-stations', 'circle-color', '#0b1c36');
-        changeYear(travelYearIndex);
+        changeYear(years.indexOf(travelYear));
       }
       [fromInput, toInput, pickFrom, pickTo, clear].forEach(control => {
         control.disabled = useConstruction;
@@ -408,7 +435,6 @@ function initMap(token) {
       constructionMode.setAttribute('aria-pressed', String(useConstruction));
       previousYear.disabled = useConstruction || yearIndex === 0;
       nextYear.disabled = useConstruction || yearIndex === years.length - 1;
-      autoplay.disabled = useConstruction;
       updateRun();
       updateVisibility();
     }
@@ -417,8 +443,19 @@ function initMap(token) {
       map, data, network, stationValue,
       activate: () => setMode(true),
       refreshVisibility: updateVisibility,
+      showEndpoints,
       startPicking,
-      cancelPicking: () => setPicking(null)
+      cancelPicking: () => setPicking(null),
+      publish(report, reset = false) {
+        const projected = report ? ConstructionInfo.projectNetwork(network, report) : network;
+        const maxYear = projected.maxYear ?? 2026;
+        simulationNetwork = projected;
+        years = [...Array.from({ length: maxYear - 2010 + 1 }, (_, i) => 2010 + i), null];
+        if (reset || !years.includes(travelYear)) travelYear = null;
+        yearIndex = years.length - 1;
+        visibleNetwork = simulationNetwork;
+        stopAutoplay();
+      }
     });
     travelMode.disabled = false;
     constructionMode.disabled = false;
@@ -460,7 +497,8 @@ function initMap(token) {
         if (picking) picking.status.textContent = 'No station there. Click a station dot on a visible network.';
         return;
       }
-      const station = network.stations.get(nearest.properties.id);
+      const station = constructionActive ? network.stations.get(nearest.properties.id) :
+        visibleNetwork.stations.get(nearest.properties.id);
       if (!picking) {
         showStationInfo(station);
         return;
@@ -507,17 +545,7 @@ function initMap(token) {
         map.setPaintProperty(layer.id, 'line-color', '#000000');
         map.setPaintProperty(layer.id, 'line-width', 0.75);
       });
-      [[from, 'Start'], [to, 'End']].forEach(([station, label]) => {
-        const element = document.createElement('div');
-        element.className = 'endpoint-marker';
-        element.setAttribute('aria-label', `${label}: ${station.properties.name}`);
-        const caption = document.createElement('span');
-        caption.textContent = label;
-        element.appendChild(caption);
-        const marker = new mapboxgl.Marker({ element })
-          .setLngLat(station.geometry.coordinates).addTo(map);
-        endpointMarkers.push({ marker, station });
-      });
+      showEndpoints([from, to], ['Start', 'End']);
       updateVisibility();
       const bounds = new mapboxgl.LngLatBounds();
       activeRoute.geojson.features.forEach(feature =>

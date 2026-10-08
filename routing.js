@@ -68,8 +68,9 @@ const RailRouting = (() => {
 
   function forYear(network, year) {
     if (year === null) return network;
-    if (!Number.isInteger(year) || year < 2010 || year > 2026) {
-      throw new Error('Choose a year from 2010 to 2026, or final plan.');
+    const maxYear = network.maxYear ?? 2026;
+    if (!Number.isInteger(year) || year < 2010 || year > maxYear) {
+      throw new Error(`Choose a year from 2010 to ${maxYear}, or final plan.`);
     }
     const stations = new Map([...network.stations].filter(([, station]) => {
       const openingYear = station.properties.station_opening_year;
